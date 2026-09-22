@@ -1,5 +1,5 @@
-# MaskedPanGenie
-This is a modified version of PanGenie that supports spaced seeds. 
+# MaskedPanGenie-v2
+This is a optimized version of MaskedPanGenie that supports spaced seeds. 
 
 Spaced seeds (patterns of care and don't care positions) are more resistent to sequencing errors than conventional contiguous k-mers and may be able to increase sensitivity of Bioinformatics applications.
 MaskedPanGenie implements this by allowing to add a spaced seed as optional parameter (-m), which will be used for the detection of unique "spaced" kmers in the provided pangenome graph.
@@ -9,6 +9,7 @@ These spaced k-mers will then be compared to spaced k-mers of the reads. We prop
 ## Related tools
 PalindromeSpEED https://github.com/garyasd/PalindromeSpEED.git
 Use this tool to generate a highly sensitive palindrome spaced seed.
+
 ## Installation
  
 `` git clone https://github.com/yutong1007/MaskedPangenie-v2.git``  
@@ -175,9 +176,17 @@ Parameter `` -e `` sets the hash size used by Jellyfish for k-mer counting. When
 
 Per default, PanGenie uses a single thread. The number of threads used for k-mer counting and genotyping/phasing can be set via parameters ``-j`` and ``-t``, respectively. 
 
+## Acknowledgements
+
+MaskedPangenie-v2 is based on and derived from the following projects:
+
+- [PanGenie](https://github.com/eblerjana/pangenie), developed by Jana Ebler and collaborators.
+- [MaskedPangenie](https://github.com/hhaentze/MaskedPangenie), developed by Hartmut Häntze and collaborators.
+
+This repository preserves and extends work from these upstream projects. Please refer to the original repositories and publications for the corresponding authorship and citations.
 
 ## Citation
-
-J. Ebler, P. Ebert, W. E. Clarke, T. Rausch, P. A. Audano, T. Houwaart, Y. Mao, J. Korbel, E. E. Eichler,
+1. J. Ebler, P. Ebert, W. E. Clarke, T. Rausch, P. A. Audano, T. Houwaart, Y. Mao, J. Korbel, E. E. Eichler,
 M. C. Zody, A. T. Dilthey, and T. Marschall. Pangenome-based genome inference. Nature genetics,
 54(4):518–525, 2022.
+2. Hartmut Häntze, Paul Horton, Effects of spaced k-mers on alignment-free genotyping, Bioinformatics, Volume 39, Issue Supplement_1, June 2023, Pages i213–i221, https://doi.org/10.1093/bioinformatics/btad202
