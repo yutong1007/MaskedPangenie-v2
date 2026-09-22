@@ -4,7 +4,7 @@ This is a optimized version of MaskedPanGenie that supports spaced seeds.
 Spaced seeds (patterns of care and don't care positions) are more resistent to sequencing errors than conventional contiguous k-mers and may be able to increase sensitivity of Bioinformatics applications.
 MaskedPanGenie implements this by allowing to add a spaced seed as optional parameter (-m), which will be used for the detection of unique "spaced" kmers in the provided pangenome graph.
 
-These spaced k-mers will then be compared to spaced k-mers of the reads. We proposed a new-version for MaskedPanGenie called Fast-MaskedPanGenie which use MaskedJellyfish for spaced k-mer counting task. Fast-MaskedPanGenie speed up 2x-3x compared to original MaskedPanGenie. 
+These spaced k-mers will then be compared to spaced k-mers of the reads. We proposed a new-version for MaskedPanGenie called MaskedPangenie-v2 which use MaskedJellyfish for spaced k-mer counting task. MaskedPangenie-v2 speed up 2x-3x compared to original MaskedPanGenie. 
 
 ## Related tools
 PalindromeSpEED https://github.com/garyasd/PalindromeSpEED.git
