@@ -4,6 +4,9 @@ bin/
 *.o
 *.so
 *.a
+*.vcf
+*.histo
+*.fasta
 CMakeFiles/
 CMakeCache.txt
 Makefile
