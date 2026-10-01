@@ -22,10 +22,12 @@ conda env create -f environment.yml
 conda activate pangenie
 ```
 
-Replace Jellyfish's `mer_overlap_sequence_parser.hpp` with the modified header provided in this repository. Set `JELLYFISH_INCLUDE_DIR` to the directory containing the installed Jellyfish header (the exact location depends on your installation):
+Replace Jellyfish's `mer_overlap_sequence_parser.hpp` with the modified header provided in this repository.:
 
 ```bash
-cp mer_overlap_sequence_parser.hpp "$JELLYFISH_INCLUDE_DIR/mer_overlap_sequence_parser.hpp"
+echo $CONDA_PREFIX
+cp mer_overlap_sequence_parser.hpp \
+   "$CONDA_PREFIX/include/jellyfish-2.2.10/jellyfish/mer_overlap_sequence_parser.hpp"
 ```
 
 Build the project:
@@ -99,10 +101,11 @@ A small example is provided in [`demo/`](demo/), including a pangenome VCF (`tes
     -r demo/test-reference.fa \
     -v demo/test-variants.vcf \
     -o test \
+    -m seed.txt \
     -e 100000
 ```
 
-The genotyping results are written to `test_genotyping.vcf`. The `-e` parameter sets a small Jellyfish hash size suitable for the demo; larger datasets may use the default or a larger value. To use spaced seeds with this version, also provide `-m <spacedSeed.txt>`.
+The genotyping results are written to `test_genotyping.vcf`. The `-e` parameter sets a small Jellyfish hash size suitable for the demo; larger datasets may use the default or a larger value.
 
 ## Acknowledgements
 
