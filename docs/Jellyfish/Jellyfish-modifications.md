@@ -25,7 +25,7 @@ not change their licensing.
 
 ## Modified parser
 
-File: [mer_overlap_sequence_parser.hpp](../../mer_overlap_sequence_parser.hpp).
+File: [src/mer_overlap_sequence_parser.hpp](../../src/mer_overlap_sequence_parser.hpp).
 
 The following summary describes the current implementation, compared with
 the [upstream v2.2.10 parser](https://github.com/gmarcais/Jellyfish/blob/da914202df293a5ab449c1907f69995879876d5c/include/jellyfish/mer_overlap_sequence_parser.hpp).
@@ -52,6 +52,12 @@ than attributed to this project's spaced-seed work.
 
 ## Integration with MaskedPanGenie-v2
 
+- The modified parser is bundled in `src/mer_overlap_sequence_parser.hpp`.
+  Both `src/jellyfishcounter.hpp` and `src/jellyfishreader.hpp` include this
+  project-local header directly. Installation no longer requires copying it
+  into Jellyfish's include directory; the external Jellyfish library is still
+  required. The relocation preserves the parser implementation and its
+  existing license notice.
 - [src/jellyfishcounter.hpp](../../src/jellyfishcounter.hpp) passes the masked
   processing flag and seed to the parser, while retaining Jellyfish's iterator
   and `COUNT`, `PRIME`, and `UPDATE` hash-table operations.
