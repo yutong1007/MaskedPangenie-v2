@@ -22,13 +22,11 @@ conda env create -f environment.yml
 conda activate pangenie
 ```
 
-Replace Jellyfish's `mer_overlap_sequence_parser.hpp` with the modified header provided in this repository.:
-
-```bash
-echo $CONDA_PREFIX
-cp mer_overlap_sequence_parser.hpp \
-   "$CONDA_PREFIX/include/jellyfish-2.2.10/jellyfish/mer_overlap_sequence_parser.hpp"
-```
+The modified Jellyfish parser is bundled in
+[`src/mer_overlap_sequence_parser.hpp`](src/mer_overlap_sequence_parser.hpp)
+and included directly by the project. No manual `cp` step or replacement of
+Jellyfish's installed headers is required. The Jellyfish library is still
+required and is installed by the Conda environment above.
 
 Build the project:
 

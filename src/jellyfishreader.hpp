@@ -8,7 +8,7 @@
 #include <jellyfish/thread_exec.hpp>
 #include <jellyfish/hash_counter.hpp>
 //#include <jellyfish/stream_manager.hpp>
-#include <jellyfish/mer_overlap_sequence_parser.hpp>
+#include "mer_overlap_sequence_parser.hpp"
 #include <jellyfish/mer_iterator.hpp>
 #include <jellyfish/mer_dna_bloom_counter.hpp>
 #include <jellyfish/file_header.hpp>
