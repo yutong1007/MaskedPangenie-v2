@@ -44,7 +44,7 @@ Run genotyping with a spaced-seed file:
 
 ```bash
 ./build/src/PanGenie \
-    -i <reads.fa/fq> \
+    -i <reads.fa> \
     -r <reference.fa> \
     -v <variants.vcf> \
     -m <spacedSeed.txt> \
@@ -73,6 +73,30 @@ Common options:
 | `-s` | Output sample name (default: `sample`). |
 
 Use `./build/src/PanGenie --help` for the full option list supported by the installed version.
+
+## Fast spaced-seed hashing
+
+When `-m` supplies a spaced seed, FASTA read counting and graph k-mer counting
+automatically use **Fast Spaced-seed Hashing (FSH)**. The command line and build
+commands are unchanged; no additional dependency or option is required.
+
+The implementation precomputes reusable positions for the seed and reuses
+previous packed k-mers, encoding only the remaining bases. It passes the full
+2-bit-per-base keys to Jellyfish, which still performs counting and graph
+filtering. Canonicalization and handling of ambiguous bases at retained
+positions are preserved. The FSH core also supports keys spanning multiple
+64-bit words. Each counting worker has its own history.
+
+This is an independent implementation of the single-seed method described by
+[Girotto, Comin and Pizzi (2018)](https://doi.org/10.1186/s13015-018-0125-4).
+It accelerates key construction; overall runtime also depends on input parsing,
+hash-table operations, and genotyping. The historical speedup reported above
+does not measure this FSH change.
+
+**Use FASTA reads for spaced-seed counting.** The existing FASTQ branch still
+counts contiguous k-mers even when `-m` is supplied; this change preserves that
+behavior. Without a seed, counting uses Jellyfish's contiguous k-mer iterator.
+Extraction of informative allele k-mers and the genotyping model are unchanged.
 
 ## Runtime and Memory Usage
 
@@ -121,6 +145,7 @@ If you use this software, please cite the underlying PanGenie and MaskedPanGenie
 
 1. Ebler, J., Ebert, P., Clarke, W. E., et al. **Pangenome-based genome inference allows efficient and accurate genotyping across a wide spectrum of variant classes.** *Nature Genetics* **54**, 518–525 (2022). https://doi.org/10.1038/s41588-022-01043-w
 2. Häntze, H., & Horton, P. **Effects of spaced k-mers on alignment-free genotyping.** *Bioinformatics* **39**(Supplement_1), i213–i221 (2023). https://doi.org/10.1093/bioinformatics/btad202
+3. Girotto, S., Comin, M., & Pizzi, C. **FSH: fast spaced seed hashing exploiting adjacent hashes.** *Algorithms for Molecular Biology* **13**, 8 (2018). https://doi.org/10.1186/s13015-018-0125-4
 
 ## License
 

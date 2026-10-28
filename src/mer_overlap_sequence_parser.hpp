@@ -10,6 +10,8 @@
 #define __JELLYFISH_MER_OVELAP_SEQUENCE_PARSER_H_
 
 #include <stdint.h>
+#include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <memory>
 
@@ -24,6 +26,7 @@ namespace jellyfish {
 struct sequence_ptr {
   char* start;
   char* end;
+  bool spaced;
 };
 
 template<typename StreamIterator>
@@ -42,6 +45,7 @@ class mer_overlap_sequence_parser : public jellyfish::cooperative_pool2<mer_over
 
   uint16_t                 mer_len_;
   size_t                   buf_size_;
+  size_t                   seam_len_;
   char*                    buffer;
   char*                    seam_buffer;
   locks::pthread::mutex    streams_mutex;
@@ -51,6 +55,7 @@ class mer_overlap_sequence_parser : public jellyfish::cooperative_pool2<mer_over
   size_t                   files_read_; // nb of files read
   size_t                   reads_read_; // nb of reads read
   bool                     used_masked; // check if use masked
+  bool                     raw_masked_;
   char*                    spaced_seed; // store sapced_seed;   
   int                      spaced_weight;
   int                      spaced_len;
@@ -63,26 +68,33 @@ public:
   /// buffer. A StreamIterator is expected to have a next() method,
   /// which is thread safe, and which returns (move) a
   /// std::unique<std::istream> object.
-  //char fsmp[51]; // store sequence left info (used for fasta)
-  char fsmp[100]; // store sequence left info (used for fasta)
+  
+  // store sequence left info (used for fasta)
+  char fsmp[100]; 
   mer_overlap_sequence_parser(uint16_t mer_len, uint32_t max_producers, uint32_t size, size_t buf_size,
-                              StreamIterator& streams, bool masked = false, char* seed = NULL) :
+                              StreamIterator& streams, bool masked = false, char* seed = NULL,
+                              bool raw_masked = false) :
     super(max_producers, size),
     mer_len_(mer_len),
     buf_size_(buf_size),
+    seam_len_(raw_masked && masked && seed ?
+              std::max<size_t>(mer_len, std::strlen(seed)) - 1 : mer_len - 1),
     buffer(new char[size * buf_size]),
-    seam_buffer(new char[max_producers * (mer_len - 1)]),
+    seam_buffer(new char[max_producers * seam_len_]),
     streams_(max_producers),
     streams_iterator_(streams),
     files_read_(0), reads_read_(0),
     used_masked(masked),
+    raw_masked_(raw_masked),
     spaced_seed(seed)
   {
-    for(sequence_ptr* it = super::element_begin(); it != super::element_end(); ++it)
+    for(sequence_ptr* it = super::element_begin(); it != super::element_end(); ++it) {
       it->start = it->end = buffer + (it - super::element_begin()) * buf_size;
+      it->spaced = false;
+    }
     for(uint32_t i = 0; i < max_producers; ++i) {
       streams_.init(i);
-      streams_[i].seam = seam_buffer + i * (mer_len - 1);
+      streams_[i].seam = seam_buffer + i * seam_len_;
       open_next_file(streams_[i]);
     }
     if (!spaced_seed){
@@ -109,11 +121,13 @@ public:
 
   inline bool produce(uint32_t i, sequence_ptr& buff) {
     stream_status& st = streams_[i];
+    buff.spaced = false;
 
     switch(st.type) {
     case FASTA_TYPE:
       if (used_masked){
-        read_fasta_masked(st, buff);
+        if (raw_masked_) read_fasta_masked_raw(st, buff);
+        else read_fasta_masked(st, buff);
       }
       else{
         read_fasta(st, buff);
@@ -185,7 +199,39 @@ protected:
     return true;
   }
 
-     void read_fasta_masked(stream_status& st, sequence_ptr& buff) {
+  // Preserve the existing masked-FASTA chunk/window boundaries, but expose
+  // raw bases to FSH instead of materializing every spaced k-mer as text.
+  void read_fasta_masked_raw(stream_status& st, sequence_ptr& buff) {
+    auto& stream = *st.stream.standard;
+    const size_t span = static_cast<size_t>(spaced_len);
+    const size_t limit = std::max<size_t>(199, span);
+    size_t read = 0;
+    if(st.have_seam) {
+      memcpy(buff.start, st.seam, span - 1);
+      read = span - 1;
+    }
+    if(stream.good()) {
+      if(limit == 199) {
+        read += read_sequence_masked(stream, read, buff.start, '>');
+      } else {
+        // Larger seeds need at least one complete window in a chunk.
+        skip_newlines(stream);
+        if(stream && stream.peek() != '>') {
+          stream.get(buff.start + read, limit + 1 - read);
+          read += stream.gcount();
+          while(read > 0 && buff.start[read - 1] == '\r') --read;
+          skip_newlines(stream);
+        }
+      }
+      if(stream.peek() == '>') ignore_line(stream);
+    }
+    st.have_seam = read == limit;
+    if(st.have_seam) memcpy(st.seam, buff.start + read - span + 1, span - 1);
+    buff.end = buff.start + read;
+    buff.spaced = true;
+  }
+
+  void read_fasta_masked(stream_status& st, sequence_ptr& buff) {
     auto& stream = *st.stream.standard;
     size_t read = 0;
     //const char* masked = "111111101010011100010110010011010001110010101111111"; // spaced seed
@@ -213,9 +259,8 @@ protected:
         ignore_line(stream); // skip to next sequence
       }
     }
-    //buff.end = buff.start + read;
+    
     st.have_seam = read + 1 == 200;
-    //st.have_seam = read >= (size_t)(mer_len_ - 1);
     if(st.have_seam){
       memcpy(fsmp, seq + read - spaced_len + 1, spaced_len - 1);
     }
