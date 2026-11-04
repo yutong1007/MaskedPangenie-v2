@@ -5,6 +5,7 @@ add_library(PanGenieLib SHARED
 	columnindexer.cpp
 	dnasequence.cpp
 	fastareader.cpp
+	fsh.cpp
 	genotypingresult.cpp
 	histogram.cpp
 	hmm.cpp

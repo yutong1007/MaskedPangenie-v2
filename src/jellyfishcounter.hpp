@@ -4,6 +4,8 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <memory>
+#include <algorithm>
 #include <jellyfish/mer_dna.hpp>
 #include <jellyfish/thread_exec.hpp>
 #include <jellyfish/hash_counter.hpp>
@@ -11,9 +13,11 @@
 #include "mer_overlap_sequence_parser.hpp"
 #include <jellyfish/mer_iterator.hpp>
 #include "kmercounter.hpp"
+#include "spacedmeriterator.hpp"
 
 /**
-* Counts Kmers in DNA-sequences (given in FASTQ-format) using jellyfish.
+* Counts canonical k-mers in DNA sequences using Jellyfish, with FSH for
+* spaced-seed FASTA counting.
  **/
 
 
@@ -27,6 +31,7 @@ typedef jellyfish::mer_iterator<sequence_parser_type, jellyfish::mer_dna>	mer_it
 class mer_counter : public jellyfish::thread_exec {
 	mer_hash_type& mer_hash_;
 	jellyfish::stream_manager<char**> streams_;
+	std::unique_ptr<FSHPlan> fsh_plan_;
 	sequence_parser_type parser_;
   const bool canonical_;
 	OPERATION op_;
@@ -37,14 +42,30 @@ public:
 	bool canonical, OPERATION op, bool used_masked = false, char* spaced_seed = nullptr)
 	: mer_hash_(mer_hash)
 	, streams_(file_begin, file_end)
-	, parser_(jellyfish::mer_dna::k(), streams_.nb_streams(), 3 * nb_threads, 8192, streams_, used_masked, spaced_seed)
+	, fsh_plan_(used_masked && spaced_seed && *spaced_seed ?
+	            new FSHPlan(spaced_seed, jellyfish::mer_dna::k()) : nullptr)
+	, parser_(jellyfish::mer_dna::k(), streams_.nb_streams(), 3 * nb_threads,
+	          fsh_plan_ ? std::max<size_t>(8192, fsh_plan_->span() + 1) : 8192,
+	          streams_, static_cast<bool>(fsh_plan_), spaced_seed,
+	          static_cast<bool>(fsh_plan_))
 	, canonical_(canonical)
 	, op_(op)
 { }
 
-	virtual void start(int thid) {
-		mer_iterator_type mers(parser_, canonical_);
+	virtual void start(int) {
+		if (fsh_plan_) {
+			SpacedMerIterator<sequence_parser_type> mers(parser_, *fsh_plan_, canonical_);
+			count_mers(mers);
+		} else {
+			mer_iterator_type mers(parser_, canonical_);
+			count_mers(mers);
+		}
+		mer_hash_.done();
+	}
 
+private:
+	template<class Iterator>
+	void count_mers(Iterator& mers) {
 		switch(op_) {
 			case COUNT:
 				for( ; mers; ++mers)
@@ -62,8 +83,6 @@ public:
 					mer_hash_.update_add(*mers, 1, tmp);
 				break;
 		}
-
-		mer_hash_.done();
 	}
 };
 

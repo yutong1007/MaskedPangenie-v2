@@ -35,12 +35,12 @@ by the current maintainer.
 
 | Area | Modification present in this repository |
 | --- | --- |
-| Parser interface | Adds the `masked` flag and `seed` argument to the constructor. |
+| Parser interface | Adds the `masked` flag, `seed` argument, and optional `raw_masked` flag to the constructor. |
 | Seed information | Stores the seed pattern, its span (`spaced_len`), and the number of retained positions (`spaced_weight`). |
-| FASTA dispatch | Routes FASTA input to `read_fasta_masked()` when masked processing is enabled. |
-| Spaced k-mer extraction | Slides a seed-length window over the input and selects the bases at positions marked `1`. An uppercase `N` at a retained position causes that candidate to be skipped. |
-| Iterator input | Appends an `N` separator after each extracted spaced k-mer, so the existing Jellyfish iterator can process the extracted strings separately. |
-| Input buffering | Adds `read_sequence_masked()`, a 200-byte temporary sequence buffer, and a 100-byte `fsmp` buffer for carrying trailing bases between full input chunks. |
+| FASTA dispatch | Routes masked FASTA counting to `read_fasta_masked_raw()` when raw mode is enabled. The earlier `read_fasta_masked()` branch remains available for callers using the default interface. |
+| Legacy extraction | The earlier branch selects bases at positions marked `1`, skips candidates with an uppercase `N` at a retained position, and appends an `N` separator after each extracted k-mer. |
+| FSH iterator input | Raw mode sends sequence buffers directly to `SpacedMerIterator`, avoiding intermediate spaced k-mer strings and separators. Buffer metadata distinguishes raw masked FASTA from the other formats. |
+| Input buffering | Raw mode preserves the existing 199-base chunk and physical-line boundaries for seeds fitting those chunks. Overlap storage is sized to the seed span and belongs to each stream. Seeds longer than a legacy chunk receive larger raw buffers. The old fixed-size temporary buffers remain confined to the legacy branch. |
 
 The masked extraction branch is currently implemented for FASTA. FASTQ input
 still follows `read_fastq()` and does not pass through `read_fasta_masked()`.
@@ -58,21 +58,40 @@ than attributed to this project's spaced-seed work.
   into Jellyfish's include directory; the external Jellyfish library is still
   required. The relocation preserves the parser implementation and its
   existing license notice.
-- [src/jellyfishcounter.hpp](../../src/jellyfishcounter.hpp) passes the masked
-  processing flag and seed to the parser, while retaining Jellyfish's iterator
-  and `COUNT`, `PRIME`, and `UPDATE` hash-table operations.
+- [src/jellyfishcounter.hpp](../../src/jellyfishcounter.hpp) creates an immutable
+  FSH plan when a nonempty seed is supplied, enables raw masked-FASTA parsing,
+  and selects [SpacedMerIterator](../../src/spacedmeriterator.hpp). Jellyfish's
+  `COUNT`, `PRIME`, and `UPDATE` hash-table operations are retained. Without a
+  seed, it uses the standard contiguous parser and iterator.
 - [src/jellyfishcounter.cpp](../../src/jellyfishcounter.cpp) forwards the seed
   when counting read and graph sequences. Canonical k-mer counting remains
   enabled in these constructors.
 - [src/pggtyper.cpp](../../src/pggtyper.cpp) reads the seed file from `-m`, checks
   the pattern, and supplies it to the counting workflow.
 
-The parser currently reconstructs each spaced k-mer by scanning the seed;
-Fast Spaced-seed Hashing (FSH) has not yet been integrated.
+## FSH counting implementation
+
+[src/fsh.hpp](../../src/fsh.hpp) and [src/fsh.cpp](../../src/fsh.cpp) independently
+implement the single-seed method from
+[Girotto, Comin and Pizzi (2018)](https://doi.org/10.1186/s13015-018-0125-4).
+No source from the authors' FSH software is bundled. The plan precomputes
+rank-based shifts, reusable-position masks, remaining positions to encode,
+and the best prior offset available during warmup. Per-worker state reuses
+packed keys and tracks ambiguous bases through the same operations.
+
+The packed representation follows Jellyfish's base order and retains all
+`2 * weight` bits, including keys using multiple 64-bit words. Canonicalization
+still uses Jellyfish's reverse complement and comparison. Masked FASTA read
+and graph counting use this path; FASTQ keeps its existing contiguous counting
+behavior. Informative allele k-mer extraction and genotyping are unchanged.
 
 ## Modification history
 
-The summary above records existing code; this documentation change does not
-modify the parser or counting implementation. Exact source commits, change
-dates, and contributor attribution can be added when the historical records
-are confirmed.
+- **2026-10-21:** Added the independently implemented FSH core, raw masked-FASTA
+  parser mode, and packed-key counting iterator. Updated the source lists for
+  the library and existing test executable. No additional test cases were
+  added. Jellyfish remains at version 2.2.10; the parser's existing license
+  header and the root `LICENSE.md` are unchanged.
+- Earlier parser changes and relocation are summarized above. Exact source
+  commits and contributor attribution can be added when historical records
+  are confirmed.
