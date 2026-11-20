@@ -74,6 +74,20 @@ Common options:
 
 Use `./build/src/PanGenie --help` for the full option list supported by the installed version.
 
+The log is organized into Input and Parameters, Reading Input, Counting k-mers,
+Unique k-mers, HMM, Output, and Performance Summary sections. Input filenames
+are abbreviated in the parameter list; the Output section lists full paths to
+the generated VCF(s) and path segments. Phasing runs report their phasing VCF.
+
+The performance table reports elapsed seconds for four stages. Reading Input
+includes writing path segments; Counting k-mers includes read and graph counting
+and the read-count histogram. HMM includes path selection, genotyping/phasing,
+and VCF writing. Parallel stages are timed until all workers finish, rather than
+by adding individual chromosome times. `Total wall-clock time` measures the
+overall elapsed time, including final cleanup. Times use three decimal places
+and comma thousands separators; memory reports the peak usage using the
+existing memory metric.
+
 ## Fast spaced-seed hashing
 
 When `-m` supplies a spaced seed, FASTA read counting and graph k-mer counting

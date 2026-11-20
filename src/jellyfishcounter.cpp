@@ -141,7 +141,6 @@ size_t JellyfishCounter::computeHistogram(size_t max_count, bool largest_peak, s
 	}
 	size_t kmer_coverage_estimate = -1;
 	if (peak_ids.size() < 2) {
-		cerr << "Histogram peak: " << peak_ids[0] << " (" << peak_values[0] << ")" << endl;
 		kmer_coverage_estimate = peak_ids[0];
 	} else {
 		size_t largest, second, largest_id, second_id;
@@ -166,7 +165,6 @@ size_t JellyfishCounter::computeHistogram(size_t max_count, bool largest_peak, s
 				second_id = peak_ids[i];
 			}
 		}
-		cerr << "Histogram peaks: " << largest_id << " (" << largest << "), " << second_id << " (" << second << ")" << endl;
 		if (largest_peak) {
 			kmer_coverage_estimate = largest_id;
 		}else {

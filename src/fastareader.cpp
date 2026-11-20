@@ -6,7 +6,8 @@ using namespace std;
 
 FastaReader::FastaReader(string filename) {
 	parse_file(filename);
-	cerr << "Found " << this->name_to_sequence.size() << " chromosome(s) from the reference file." << endl;
+	cerr << "  Found " << this->name_to_sequence.size()
+	     << (this->name_to_sequence.size() == 1 ? " chromosome." : " chromosomes.") << endl;
 }
 
 
