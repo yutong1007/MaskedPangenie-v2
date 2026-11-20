@@ -4,6 +4,7 @@
 #include <math.h>
 #include <regex>
 #include "variantreader.hpp"
+#include "logformat.hpp"
 
 
 using namespace std;
@@ -94,6 +95,7 @@ VariantReader::VariantReader(string filename, string reference_filename, size_t 
 	if (!file.good()) {
 		throw runtime_error("VariantReader::VariantReader: input VCF file cannot be opened.");
 	}
+	cerr << "\nReading VCF and constructing allele sequences..." << endl;
 	string line;
 	string previous_chrom("");
 	size_t previous_end_pos = 0;
@@ -231,7 +233,7 @@ VariantReader::VariantReader(string filename, string reference_filename, size_t 
 	}
 	// add last cluster to list
 	add_variant_cluster(previous_chrom, &variant_cluster);
-	cerr << "Identified " << this->nr_variants << " variants in total from VCF-file." << endl;
+	cerr << "  Identified " << log_output::count(this->nr_variants) << " variants." << endl;
 }
 
 size_t VariantReader::get_kmer_size() const {

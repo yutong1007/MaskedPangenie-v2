@@ -19,6 +19,7 @@
 #include "timer.hpp"
 #include "threadpool.hpp"
 #include "pathsampler.hpp"
+#include "logformat.hpp"
 
 using namespace std;
 
@@ -121,13 +122,15 @@ int main (int argc, char* argv[])
 	double time_preprocessing;
 	double time_kmer_counting;
 	double time_unique_kmers;
-	double time_path_sampling;
-	double time_writing;
+	double time_hmm;
 	double time_total;
 
-	cerr << endl;
-	cerr << "program: PanGenie - genotyping and phasing based on kmer-counting and known haplotype sequences." << endl;
-	cerr << "author: Jana Ebler" << endl << endl;
+	const string rule(60, '=');
+	const string divider(60, '-');
+	cerr << rule << "\nMaskedPanGenie\n"
+	     << "A spaced k-mer-based version of PanGenie for genotyping\n"
+	     << "and phasing using k-mer counts and known haplotype sequences.\n"
+	     << rule << '\n';
 	string readfile = "";
 	string reffile = "";
 	string vcffile = "";
@@ -212,10 +215,6 @@ int main (int argc, char* argv[])
 	istringstream iss(argument_parser.get_argument('e'));
 	iss >> hash_size;
 
-	// print info
-	cerr << "Files and parameters used:" << endl;
-	argument_parser.info();
-
 	// check if input files exist and are uncompressed
 	check_input_file(reffile);
 	check_input_file(vcffile);
@@ -254,33 +253,33 @@ int main (int argc, char* argv[])
 			throw runtime_error("Mask is not canonical!");
 		}
 
-		// print info
-		cerr << "Mask \t" << mask << endl;
 	}
 	char* mask_c = const_cast<char* >(mask.c_str());
 
+	cerr << "\n\nInput and Parameters\n" << divider << '\n'
+	     << "Reads:          " << log_output::filename(readfile) << '\n'
+	     << "Reference:      " << log_output::filename(reffile) << '\n'
+	     << "VCF:            " << log_output::filename(vcffile) << '\n'
+	     << "Output prefix:  " << log_output::filename(outname) << "\n\n"
+	     << "k:              " << kmersize << '\n'
+	     << "Threads (-j):   " << nr_jellyfish_threads << '\n'
+	     << "Threads (-t):   " << nr_core_threads << "\n\n"
+	     << "Spaced seed:\n" << (mask.empty() ? "None (contiguous k-mers)" : mask) << '\n';
+
 	// read allele sequences and unitigs inbetween, write them into file
-	cerr << "Determine allele sequences ..." << endl;
+	log_output::section(cerr, "Reading Input");
+	cerr << "Reading reference genome..." << endl;
 	VariantReader variant_reader (vcffile, reffile, kmersize, add_reference, sample_name, mask);
-	
-	// TODO: only for analysis
-	struct rusage r_usage00;
-	getrusage(RUSAGE_SELF, &r_usage00);
-	cerr << "#### Memory usage until now: " << (r_usage00.ru_maxrss / 1E6) << " GB ####" << endl;
-	
-	string segment_file = outname + "_path_segments.fasta";
-	cerr << "Write path segments to file: " << segment_file << " ..." << endl;
-	variant_reader.write_path_segments(segment_file);
 
 	// determine chromosomes present in VCF
 	vector<string> chromosomes;
 	variant_reader.get_chromosomes(&chromosomes);
-	cerr << "Found " << chromosomes.size() << " chromosome(s) in the VCF." << endl;
+	cerr << "  Found " << chromosomes.size()
+	     << (chromosomes.size() == 1 ? " chromosome in the VCF." : " chromosomes in the VCF.") << endl;
 
-	// TODO: only for analysis
-	struct rusage r_usage0;
-	getrusage(RUSAGE_SELF, &r_usage0);
-	cerr << "#### Memory usage until now: " << (r_usage0.ru_maxrss / 1E6) << " GB ####" << endl;
+	string segment_file = outname + "_path_segments.fasta";
+	cerr << "\nWriting path segments..." << endl;
+	variant_reader.write_path_segments(segment_file);
 
 	time_preprocessing = timer.get_interval_time();
 
@@ -289,14 +288,18 @@ int main (int argc, char* argv[])
 	ProbabilityTable probabilities;
 
 	{
+		log_output::section(cerr, "Counting k-mers");
 		KmerCounter* read_kmer_counts = nullptr;
 		// determine kmer copynumbers in reads
 		if (readfile.substr(std::max(3, (int) readfile.size())-3) == std::string(".jf")) {
-			cerr << "Read pre-computed read kmer counts ..." << endl;
+			cerr << "Reading precomputed k-mer counts..." << endl;
 			jellyfish::mer_dna::k(kmersize);
 			read_kmer_counts = new JellyfishReader(readfile, kmersize);
 		} else {
-			cerr << "Count kmers in reads ..." << endl;
+			// Only the FASTA branch currently applies the spaced-seed mask.
+			const bool spaced_reads = !mask.empty() && ifstream(readfile).peek() == '>';
+			cerr << (spaced_reads ? "Counting spaced k-mers in reads..." :
+			                         "Counting contiguous k-mers in reads...") << endl;
 			if (count_only_graph) {
 				read_kmer_counts = new JellyfishCounter(readfile, segment_file, kmersize, nr_jellyfish_threads, hash_size, mask_c);
 			} else {
@@ -305,12 +308,12 @@ int main (int argc, char* argv[])
 		}
 
 		size_t kmer_abundance_peak = read_kmer_counts->computeHistogram(10000, count_only_graph, outname + "_histogram.histo");
-		cerr << "Computed kmer abundance peak: " << kmer_abundance_peak << endl;
 
 		//TODO: HAIMO Validate if correct
 		// count kmers in allele + reference sequence
 		KmerCounter* genomic_kmer_counts = nullptr;
-		cerr << "Count kmers in genome ..." << endl;
+		cerr << (mask.empty() ? "Counting contiguous k-mers in genome..." :
+		                       "Counting spaced k-mers in genome...") << endl;
 		genomic_kmer_counts = new JellyfishCounter(segment_file, kmersize, nr_jellyfish_threads, hash_size, mask_c);
 		// if(segment_mer_file != "" && segment_mer_file .substr(std::max(3, (int) segment_mer_file .size())-3) == std::string(".jf") )
 		// {
@@ -321,18 +324,14 @@ int main (int argc, char* argv[])
 		// 	genomic_kmer_counts = new JellyfishCounter(segment_file, kmersize, nr_jellyfish_threads, hash_size);
 		// }
 
-		// TODO: only for analysis
-		struct rusage r_usage1;
-		getrusage(RUSAGE_SELF, &r_usage1);
-		cerr << "#### Memory usage until now: " << (r_usage1.ru_maxrss / 1E6) << " GB ####" << endl;
-
 		// prepare output files
 		if (! only_phasing) variant_reader.open_genotyping_outfile(outname + "_genotyping.vcf");
 		if (! only_genotyping) variant_reader.open_phasing_outfile(outname + "_phasing.vcf");
 
 		time_kmer_counting = timer.get_interval_time();
 
-		cerr << "Determine unique kmers ..." << endl;
+		log_output::section(cerr, "Unique k-mers");
+		cerr << "Determining unique k-mers..." << endl;
 		// determine number of cores to use
 		size_t available_threads_uk = min(thread::hardware_concurrency(), (unsigned int) chromosomes.size());
 		size_t nr_cores_uk = min(nr_core_threads, available_threads_uk);
@@ -356,21 +355,12 @@ int main (int argc, char* argv[])
 			}
 		}
 
-		// TODO: only for analysis
-		struct rusage r_usage2;
-		getrusage(RUSAGE_SELF, &r_usage2);
-		cerr << "#### Memory usage until now: " << (r_usage2.ru_maxrss / 1E6) << " GB ####" << endl;
-
 		delete read_kmer_counts;
 		read_kmer_counts = nullptr;
 		time_unique_kmers = timer.get_interval_time();
-		cerr << "time spent determining unique kmers: \t" << time_unique_kmers << " sec" << endl; 
 	}
 
-	// TODO: only for analysis
-	struct rusage r_usage3;
-	getrusage(RUSAGE_SELF, &r_usage3);
-	cerr << "#### Memory usage until now: " << (r_usage3.ru_maxrss / 1E6) << " GB ####" << endl;
+	log_output::section(cerr, "HMM");
 
 	// prepare subsets of paths to run on
 	unsigned short nr_paths = variant_reader.nr_of_paths();
@@ -389,29 +379,15 @@ int main (int argc, char* argv[])
 	vector<vector<unsigned short>> subsets;
 	path_sampler.partition_samples(subsets, sampling_size);
 
-	for (auto s : subsets) {
-		for (auto b : s) {
-			cout << b << endl;
-		}
-		cout << "-----" << endl;
-	}
-
-	if (!only_phasing) cerr << "Sampled " << subsets.size() << " subset(s) of paths each of size " << sampling_size << " for genotyping." << endl;
-
 	// for now, run phasing only once on largest set of paths that can still be handled.
 	// in order to use all paths, an iterative stradegie should be considered
 	vector<unsigned short> phasing_paths;
 	unsigned short nr_phasing_paths = min((unsigned short) nr_paths, (unsigned short) 30);
 	path_sampler.select_single_subset(phasing_paths, nr_phasing_paths);
-	if (!only_genotyping) cerr << "Sampled " << phasing_paths.size() << " paths to be used for phasing." << endl;
-	time_path_sampling = timer.get_interval_time();
-	
-	// TODO: only for analysis
-	struct rusage r_usage30;
-	getrusage(RUSAGE_SELF, &r_usage30);
-	cerr << "#### Memory usage until now: " << (r_usage30.ru_maxrss / 1E6) << " GB ####" << endl;
 
-	cerr << "Construct HMM and run core algorithm ..." << endl;
+	const string operation = only_genotyping ? "genotyping" :
+	                         (only_phasing ? "phasing" : "genotyping and phasing");
+	cerr << "Constructing HMM and performing " << operation << "..." << endl;
 
 	// determine max number of available threads for genotyping (at most one thread per chromosome and subsample possible)
 	size_t available_threads = min(thread::hardware_concurrency(), (unsigned int) chromosomes.size() * (unsigned int) subsets.size());
@@ -447,10 +423,10 @@ int main (int argc, char* argv[])
 		}
 	}
 
-	timer.get_interval_time();
-
 	// output VCF
-	cerr << "Write results to VCF ..." << endl;
+	if (only_genotyping) cerr << "Writing genotype results..." << endl;
+	else if (only_phasing) cerr << "Writing phasing results..." << endl;
+	else cerr << "Writing genotype and phasing results..." << endl;
 	if (!(only_genotyping && only_phasing)) assert (results.result.size() == chromosomes.size());
 	// write VCF
 	for (auto it = results.result.begin(); it != results.result.end(); ++it) {
@@ -468,29 +444,17 @@ int main (int argc, char* argv[])
 	if (! only_phasing) variant_reader.close_genotyping_outfile();
 	if (! only_genotyping) variant_reader.close_phasing_outfile();
 
-	time_writing = timer.get_interval_time();
-	time_total = timer.get_total_time();
+	// This stage includes path selection, parallel inference, and VCF writing.
+	time_hmm = timer.get_interval_time();
 
-	cerr << endl << "###### Summary ######" << endl;
-	// output times
-	cerr << "time spent reading input files:\t" << time_preprocessing << " sec" << endl;
-	cerr << "time spent counting kmers: \t" << time_kmer_counting << " sec" << endl;
-	cerr << "time spent selecting paths: \t" << time_path_sampling << " sec" << endl;
-	cerr << "time spent determining unique kmers: \t" << time_unique_kmers << " sec" << endl; 
-	// output per chromosome time
-	double time_hmm = time_writing;
-	for (auto chromosome : chromosomes) {
-		double time_chrom = results.runtimes[chromosome] + unique_kmers_list.runtimes[chromosome];
-		cerr << "time spent genotyping chromosome " << chromosome << ":\t" << time_chrom << endl;
-		time_hmm += time_chrom;
+	log_output::section(cerr, "Output");
+	if (!only_phasing) {
+		cerr << "Genotype VCF:\n  " << log_output::absolute_path(outname + "_genotyping.vcf") << "\n\n";
 	}
-	cerr << "total running time:\t" << time_preprocessing + time_kmer_counting + time_path_sampling + time_unique_kmers +  time_hmm + time_writing << " sec"<< endl;
-	cerr << "total wallclock time: " << time_total  << " sec" << endl;
-
-	// memory usage
-	struct rusage r_usage;
-	getrusage(RUSAGE_SELF, &r_usage);
-	cerr << "Total maximum memory usage: " << (r_usage.ru_maxrss / 1E6) << " GB" << endl;
+	if (!only_genotyping) {
+		cerr << "Phasing VCF:\n  " << log_output::absolute_path(outname + "_phasing.vcf") << "\n\n";
+	}
+	cerr << "Path segments:\n  " << log_output::absolute_path(segment_file) << '\n';
 
 	// destroy UniqueKmers
 	for (auto it = unique_kmers_list.unique_kmers.begin(); it != unique_kmers_list.unique_kmers.end(); ++it){
@@ -499,6 +463,20 @@ int main (int argc, char* argv[])
 			it->second[i] = nullptr;
 		}
 	}
+
+	time_total = timer.get_total_time();
+	struct rusage r_usage;
+	getrusage(RUSAGE_SELF, &r_usage);
+	log_output::section(cerr, "Performance Summary");
+	cerr << "Stage                     Time (sec)\n" << divider << '\n';
+	log_output::metric(cerr, "Reading Input", time_preprocessing);
+	log_output::metric(cerr, "Counting k-mers", time_kmer_counting);
+	log_output::metric(cerr, "Unique k-mers", time_unique_kmers);
+	log_output::metric(cerr, "HMM", time_hmm);
+	cerr << divider << '\n';
+	log_output::metric(cerr, "Total wall-clock time", time_total);
+	log_output::metric(cerr, "Total memory usage", r_usage.ru_maxrss / 1E6, " GB");
+	cerr << '\n' << rule << "\nMaskedPanGenie completed successfully.\n" << rule << endl;
 
 	return 0;
 }
